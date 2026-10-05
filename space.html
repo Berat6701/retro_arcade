@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Space Invaders - Retro Arcade</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: #1a0b2e;
+      color: #fff;
+      font-family: 'Press Start 2P', cursive;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    h1 { color: #00f0ff; text-shadow: 2px 2px #f20089; font-size: 20px; margin-bottom: 10px; }
+    canvas { background: #050510; border: 4px solid #00f0ff; box-shadow: 0 0 20px #00f0ff; margin-top: 10px; }
+    .btn-geri { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #f20089; color: #fff; text-decoration: none; font-size: 10px; border-radius: 5px; }
+    .info { margin-top: 15px; color: #a393eb; font-size: 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>SPACE INVADERS</h1>
+  <p class="info">Sola/Sağa Yön Tuşları: Hareket | BOŞLUK: Ateş Et</p>
+  <canvas id="game" width="500" height="420"></canvas>
+  <br>
+  <a href="index.html" class="btn-geri">&lt; ANA SAYFAYA DÖN</a>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    let player = { x: 230, y: 370, w: 32, h: 20, dx: 4 };
+    let bullets = [];
+    let enemyBullets = [];
+    let aliens = [];
+    let explosions = [];
+    let rightPressed = false, leftPressed = false, spacePressed = false;
+    let score = 0;
+    let lives = 3;
+    let gameOver = false;
+    let win = false;
+    let alienDirection = 1;
+    let alienSpeed = 0.8;
+
+    // Siperler
+    let shields = [
+      { x: 60, y: 310, w: 60, h: 30, hp: 12 },
+      { x: 220, y: 310, w: 60, h: 30, hp: 12 },
+      { x: 380, y: 310, w: 60, h: 30, hp: 12 }
+    ];
+
+    // 4 Satır x 8 Sütun Düşmanlar
+    const rows = 4, cols = 8;
+    for (let r = 0; r < rows; r++) {
+      aliens[r] = [];
+      for (let c = 0; c < cols; c++) {
+        aliens[r][c] = { x: c * 48 + 50, y: r * 32 + 40, w: 28, h: 20, status: 1, type: r };
+      }
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
+      if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+      if (e.key === " " && !spacePressed && !gameOver) {
+        bullets.push({ x: player.x + player.w / 2 - 2, y: player.y, w: 4, h: 10 });
+        spacePressed = true;
+      }
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+      if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+      if (e.key === " ") spacePressed = false;
+    });
+
+    function drawPlayer(x, y) {
+      ctx.fillStyle = "#00f0ff";
+      // Gövde & Namlu
+      ctx.fillRect(x + 12, y, 8, 6);
+      ctx.fillRect(x + 8, y + 6, 16, 6);
+      ctx.fillRect(x, y + 12, 32, 8);
+      // Detay Işıkları
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(x + 4, y + 14, 4, 4);
+      ctx.fillRect(x + 24, y + 14, 4, 4);
+    }
+
+    function drawAlien(x, y, type) {
+      if (type === 0) { // Üst Sıra (Pembe Ahtapot)
+        ctx.fillStyle = "#f20089";
+        ctx.fillRect(x + 8, y, 12, 4);
+        ctx.fillRect(x + 4, y + 4, 20, 8);
+        ctx.fillRect(x, y + 8, 28, 4);
+        ctx.fillRect(x + 4, y + 16, 4, 4);
+        ctx.fillRect(x + 20, y + 16, 4, 4);
+        // Gözler
+        ctx.fillStyle = "#000";
+        ctx.fillRect(x + 8, y + 6, 4, 4);
+        ctx.fillRect(x + 16, y + 6, 4, 4);
+      } else if (type < 3) { // Orta Sıra (Sarı Yengeç)
+        ctx.fillStyle = "#ffff00";
+        ctx.fillRect(x + 4, y, 20, 4);
+        ctx.fillRect(x, y + 4, 28, 8);
+        ctx.fillRect(x + 4, y + 12, 20, 4);
+        ctx.fillRect(x, y + 16, 6, 4);
+        ctx.fillRect(x + 22, y + 16, 6, 4);
+        // Gözler
+        ctx.fillStyle = "#000";
+        ctx.fillRect(x + 6, y + 6, 4, 4);
+        ctx.fillRect(x + 18, y + 6, 4, 4);
+      } else { // Alt Sıra (Yeşil Böcek)
+        ctx.fillStyle = "#00ff66";
+        ctx.fillRect(x + 8, y, 12, 4);
+        ctx.fillRect(x + 4, y + 4, 20, 10);
+        ctx.fillRect(x + 2, y + 14, 8, 4);
+        ctx.fillRect(x + 18, y + 14, 8, 4);
+        // Gözler
+        ctx.fillStyle = "#000";
+        ctx.fillRect(x + 6, y + 6, 4, 4);
+        ctx.fillRect(x + 18, y + 6, 4, 4);
+      }
+    }
+
+    function drawShields() {
+      shields.forEach(s => {
+        if (s.hp > 0) {
+          ctx.fillStyle = "#00a8a8";
+          ctx.fillRect(s.x, s.y, s.w, s.h);
+          // Hasar Görseli
+          ctx.fillStyle = "#050510";
+          if (s.hp < 10) ctx.fillRect(s.x + 10, s.y + 5, 8, 8);
+          if (s.hp < 7) ctx.fillRect(s.x + 35, s.y + 15, 10, 8);
+          if (s.hp < 4) ctx.fillRect(s.x + 20, s.y + 20, 15, 10);
+        }
+      });
+    }
+
+    function updateBullets() {
+      // Oyuncu Mermisi
+      ctx.fillStyle = "#00f0ff";
+      bullets.forEach((b, i) => {
+        b.y -= 8;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        if (b.y < 0) bullets.splice(i, 1);
+
+        shields.forEach(s => {
+          if (s.hp > 0 && b.x > s.x && b.x < s.x + s.w && b.y > s.y && b.y < s.y + s.h) {
+            s.hp--;
+            bullets.splice(i, 1);
+          }
+        });
+      });
+
+      // Düşman Mermisi
+      ctx.fillStyle = "#ff2200";
+      enemyBullets.forEach((eb, i) => {
+        eb.y += 4.5;
+        ctx.fillRect(eb.x, eb.y, eb.w, eb.h);
+
+        // Oyuncuya Çarpma
+        if (eb.x > player.x && eb.x < player.x + player.w && eb.y > player.y && eb.y < player.y + player.h) {
+          lives--;
+          enemyBullets.splice(i, 1);
+          if (lives <= 0) gameOver = true;
+        }
+
+        shields.forEach(s => {
+          if (s.hp > 0 && eb.x > s.x && eb.x < s.x + s.w && eb.y > s.y && eb.y < s.y + s.h) {
+            s.hp--;
+            enemyBullets.splice(i, 1);
+          }
+        });
+
+        if (eb.y > canvas.height) enemyBullets.splice(i, 1);
+      });
+    }
+
+    function updateAliens() {
+      let moveDown = false;
+      let activeAliens = 0;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          let a = aliens[r][c];
+          if (a.status === 1) {
+            activeAliens++;
+            a.x += alienSpeed * alienDirection;
+
+            if (a.x + a.w > canvas.width - 20 || a.x < 20) {
+              moveDown = true;
+            }
+
+            bullets.forEach((b, bi) => {
+              if (b.x > a.x && b.x < a.x + a.w && b.y > a.y && b.y < a.y + a.h) {
+                a.status = 0;
+                explosions.push({ x: a.x, y: a.y, timer: 10 });
+                bullets.splice(bi, 1);
+                score += (4 - r) * 10;
+              }
+            });
+
+            if (a.y + a.h >= player.y) gameOver = true;
+
+            if (Math.random() < 0.0015) {
+              enemyBullets.push({ x: a.x + a.w / 2, y: a.y + a.h, w: 4, h: 10 });
+            }
+
+            drawAlien(a.x, a.y, a.type);
+          }
+        }
+      }
+
+      if (moveDown) {
+        alienDirection *= -1;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            aliens[r][c].y += 10;
+          }
+        }
+      }
+
+      if (activeAliens === 0) { win = true; gameOver = true; }
+    }
+
+    function drawExplosions() {
+      ctx.fillStyle = "#ffffff";
+      explosions.forEach((ex, i) => {
+        ctx.fillRect(ex.x + 4, ex.y + 4, 6, 6);
+        ctx.fillRect(ex.x + 16, ex.y + 12, 6, 6);
+        ctx.fillRect(ex.x + 8, ex.y + 16, 6, 6);
+        ex.timer--;
+        if (ex.timer <= 0) explosions.splice(i, 1);
+      });
+    }
+
+    function drawHUD() {
+      ctx.fillStyle = "#fff";
+      ctx.font = '10px "Press Start 2P"';
+      ctx.fillText("SKOR: " + score, 15, 25);
+      ctx.fillText("CAN: " + lives, canvas.width - 110, 25);
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!gameOver) {
+        if (rightPressed && player.x < canvas.width - player.w) player.x += player.dx;
+        if (leftPressed && player.x > 0) player.x -= player.dx;
+
+        drawPlayer(player.x, player.y);
+        drawShields();
+        updateBullets();
+        updateAliens();
+        drawExplosions();
+        drawHUD();
+
+        requestAnimationFrame(loop);
+      } else {
+        ctx.fillStyle = win ? "#00f0ff" : "#f20089";
+        ctx.font = '16px "Press Start 2P"';
+        ctx.textAlign = "center";
+        ctx.fillText(win ? "TEBRİKLER KAZANDIN!" : "GAME OVER", canvas.width / 2, canvas.height / 2);
+      }
+    }
+
+    loop();
+  </script>
+</body>
+</html>
